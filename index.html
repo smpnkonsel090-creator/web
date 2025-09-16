@@ -76,7 +76,6 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
-// Variabel
 let jamDatangMulai=6, jamDatangAkhir=9, jamPulangMulai=11, jamPulangAkhir=13, toleransiMenit=3;
 let tanggalLiburList=[], sudahPrefill=false;
 const debounceMap = {};
@@ -91,39 +90,48 @@ function showToast(msg){
     setTimeout(()=>toast.remove(),3000);
 }
 
-function getToday(){ return new Date().toISOString().split('T')[0]; }
+function getToday(){
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth()+1).padStart(2,'0');
+    const dd = String(now.getDate()).padStart(2,'0');
+    return `${yyyy}-${mm}-${dd}`;
+}
+
 function isDalamRentang(jamSekarang, menitSekarang, jamMulai, jamAkhir){
     const totalMenit = jamSekarang*60 + menitSekarang;
     return totalMenit >= jamMulai*60 && totalMenit <= jamAkhir*60;
 }
 
-// Ambil pengaturan jam sekolah
+// Ambil pengaturan jam sekolah dan tanggal libur
 function ambilPengaturanJamSekolah(onDone){
     db.collection("pengaturan").doc("jam_sekolah").get().then(doc=>{
         if(doc.exists){
-            jamDatangMulai = parseInt(doc.get("jam_masuk_awal") ?? 6);
-            jamDatangAkhir = parseInt(doc.get("jam_masuk_akhir") ?? 9);
-            jamPulangMulai = parseInt(doc.get("jam_pulang_awal") ?? 11);
-            jamPulangAkhir = parseInt(doc.get("jam_pulang_akhir") ?? 13);
+            jamDatangMulai = parseInt(doc.get("jamDatangMulai") ?? 6);
+            jamDatangAkhir = parseInt(doc.get("jamDatangAkhir") ?? 9);
+            jamPulangMulai = parseInt(doc.get("jamPulangMulai") ?? 11);
+            jamPulangAkhir = parseInt(doc.get("jamPulangAkhir") ?? 13);
             tanggalLiburList = doc.get("tanggal_libur") ?? [];
         }
         onDone();
     }).catch(err=>{ console.error(err); showToast("Gagal ambil jam sekolah"); onDone(); });
 }
 
-// Prefill absensi (tidak menimpa data lama)
+// Prefill absensi hari ini (tidak menimpa data lama)
 function prefillAbsensiHariIni(onDone){
     const today = getToday();
     const absensiRef = db.collection("absensi").doc(today);
     absensiRef.get().then(doc=>{
         db.collection("siswa").get().then(snapshot=>{
-            const newData={};
+            const newData = {};
             const existingData = doc.exists ? doc.data() : {};
             snapshot.forEach(siswa=>{
                 const nis = siswa.get("nis");
                 if(!existingData[nis]){
-                    newData[nis]={status:"TA", jamDatang:null, jamPulang:null, keterangan:"",
-                        nis:nis, nama:siswa.get("nama"), kelas:siswa.get("kelas")};
+                    newData[nis] = {
+                        status:"TA", jamDatang:null, jamPulang:null, keterangan:"",
+                        nis:nis, nama:siswa.get("nama"), kelas:siswa.get("kelas")
+                    };
                 }
             });
             if(Object.keys(newData).length>0){
@@ -133,7 +141,7 @@ function prefillAbsensiHariIni(onDone){
     });
 }
 
-// Tabel realtime
+// Update tabel realtime
 function updateAbsensiTableRealtime(today){
     db.collection("absensi").doc(today).onSnapshot(doc=>{
         const data = doc.data() || {};
@@ -147,27 +155,28 @@ function updateAbsensiTableRealtime(today){
             const jamDatang = siswa.jamDatang ? new Date(siswa.jamDatang.seconds*1000).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}) : '';
             const jamPulang = siswa.jamPulang ? new Date(siswa.jamPulang.seconds*1000).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}) : '';
             const row = document.createElement("tr");
-            row.innerHTML=`<td>${siswa.nis}</td><td>${siswa.nama}</td><td>${siswa.kelas}</td><td>${jamDatang}</td><td>${jamPulang}</td><td>${siswa.status}</td><td>${siswa.keterangan}</td>`;
+            row.innerHTML = `<td>${siswa.nis}</td><td>${siswa.nama}</td><td>${siswa.kelas}</td><td>${jamDatang}</td><td>${jamPulang}</td><td>${siswa.status}</td><td>${siswa.keterangan}</td>`;
             absensiBody.appendChild(row);
         });
     });
 }
 
-// Update status absensi (tidak menimpa jika sudah ada)
+// Update status absensi sesuai APK
 function updateStatusAbsensi(nis){
-    const today=getToday();
-    const now=new Date();
-    const jamSekarang=now.getHours();
-    const menitSekarang=now.getMinutes();
+    const today = getToday();
+    const now = new Date();
+    const jamSekarang = now.getHours();
+    const menitSekarang = now.getMinutes();
 
     if(tanggalLiburList.includes(today)){ showToast("Hari ini libur"); return; }
 
     const absensiRef = db.collection("absensi").doc(today);
     absensiRef.get().then(doc=>{
         if(!doc.exists || !doc.data()[nis]){ showToast("Data absensi tidak ditemukan"); return; }
-        const siswa=doc.data()[nis];
-        const jamDatang=siswa.jamDatang, jamPulang=siswa.jamPulang;
-        const ket=siswa.keterangan||"";
+        const siswa = doc.data()[nis];
+        const jamDatang = siswa.jamDatang;
+        const jamPulang = siswa.jamPulang;
+        const ket = siswa.keterangan || "";
 
         if(["IZIN","SAKIT"].includes(ket.toUpperCase())){
             showToast(`Siswa ${nis} (${ket}) hari ini`); beep.play(); return;
@@ -177,30 +186,30 @@ function updateStatusAbsensi(nis){
             if(isDalamRentang(jamSekarang, menitSekarang,jamDatangMulai,jamDatangAkhir+toleransiMenit)){
                 const keterangan = jamSekarang>jamDatangAkhir ? "Terlambat" : "Absen datang berhasil";
                 absensiRef.update({
-                    [`${nis}.jamDatang`]:firebase.firestore.FieldValue.serverTimestamp(),
-                    [`${nis}.status`]:"TK",
-                    [`${nis}.keterangan`]:keterangan
+                    [`${nis}.jamDatang`]: firebase.firestore.FieldValue.serverTimestamp(),
+                    [`${nis}.status`]: "TK",
+                    [`${nis}.keterangan`]: keterangan
                 }).then(()=>{ showToast(keterangan); beep.play(); });
             } else showToast("Belum bisa absen datang");
         } else if(!jamPulang){
             if(isDalamRentang(jamSekarang, menitSekarang,jamPulangMulai,jamPulangAkhir+toleransiMenit)){
                 absensiRef.update({
-                    [`${nis}.jamPulang`]:firebase.firestore.FieldValue.serverTimestamp(),
-                    [`${nis}.status`]:"Hadir",
-                    [`${nis}.keterangan`]:"Absen pulang berhasil"
+                    [`${nis}.jamPulang`]: firebase.firestore.FieldValue.serverTimestamp(),
+                    [`${nis}.status`]: "Hadir",
+                    [`${nis}.keterangan`]: "Absen pulang berhasil"
                 }).then(()=>{ showToast("Absen pulang berhasil"); beep.play(); });
             } else showToast("Belum bisa absen pulang");
         } else { showToast("Sudah lengkap absen hari ini"); beep.play(); }
     }).catch(err=>{ console.error(err); showToast("Gagal update absensi"); });
 }
 
-// Scan
+// Scan QR
 function onScanSuccess(nis){
-    nis=nis.trim();
+    nis = nis.trim();
     if(!nis) return;
-    const now=Date.now();
-    if(debounceMap[nis] && now-debounceMap[nis]<debounceMillis) return;
-    debounceMap[nis]=now;
+    const now = Date.now();
+    if(debounceMap[nis] && now - debounceMap[nis] < debounceMillis) return;
+    debounceMap[nis] = now;
     updateStatusAbsensi(nis);
 }
 
@@ -217,7 +226,7 @@ function mulaiScan(){
 // Inisialisasi
 ambilPengaturanJamSekolah(()=>{
     prefillAbsensiHariIni(()=>{
-        const today=getToday();
+        const today = getToday();
         updateAbsensiTableRealtime(today);
         mulaiScan();
     });
