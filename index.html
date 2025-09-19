@@ -141,15 +141,17 @@ function prefillAbsensiHariIni(onDone){
     });
 }
 
-// Update tabel realtime
+// Update tabel realtime (siswa absen terakhir di atas)
 function updateAbsensiTableRealtime(today){
     db.collection("absensi").doc(today).onSnapshot(doc=>{
         const data = doc.data() || {};
         const siswaArr = Object.values(data).sort((a,b)=>{
-            const tA = a.jamDatang ? a.jamDatang.seconds : 0;
-            const tB = b.jamDatang ? b.jamDatang.seconds : 0;
-            return tB - tA;
+            // gunakan jam pulang jika ada, kalau belum pakai jam datang, kalau belum ada 0
+            const tA = a.jamPulang ? a.jamPulang.seconds : (a.jamDatang ? a.jamDatang.seconds : 0);
+            const tB = b.jamPulang ? b.jamPulang.seconds : (b.jamDatang ? b.jamDatang.seconds : 0);
+            return tB - tA; // descending, absen terakhir di atas
         });
+
         absensiBody.innerHTML="";
         siswaArr.forEach(siswa=>{
             const jamDatang = siswa.jamDatang ? new Date(siswa.jamDatang.seconds*1000).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}) : '';
