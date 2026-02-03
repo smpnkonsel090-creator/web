@@ -1,315 +1,242 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8">
-  <title>QR Scanner Absensi Siswa</title>
+<meta charset="UTF-8">
+<title>Absensi QR SMPN 20</title>
 
-  <!-- Firebase -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
 
-  <!-- QR Scanner -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<style>
+body{font-family:Arial;background:#f4f4f4;margin:0}
+header{background:#007bff;color:#fff;padding:15px;text-align:center}
 
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 0;
-      background: #f4f4f4;
-    }
+#container{display:flex;gap:20px;padding:20px;flex-wrap:wrap;justify-content:center}
 
-    header {
-      background: #007bff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 15px 20px;
-      color: white;
-      gap: 15px;
-      text-align: center;
-    }
+#qr-reader{width:380px;height:380px;border:3px solid #007bff;border-radius:12px;background:#000}
 
-    header img {
-      width: 80px;
-      height: 80px;
-      object-fit: contain;
-    }
+#panel{
+  margin-top:10px;
+  background:#fff;
+  border-radius:10px;
+  padding:10px;
+  box-shadow:0 2px 8px rgba(0,0,0,.1);
+}
+#panel label{display:flex;align-items:center;gap:10px;margin:6px 0}
 
-    header h1 {
-      margin: 0;
-      font-size: 26px;
-    }
+#absensi-wrapper{
+  flex:1 1 700px;
+  background:#fff;
+  border-radius:12px;
+  overflow:auto;
+  max-height:480px;
+  border:2px solid #007bff;
+}
 
-    header h3 {
-      margin: 0;
-      font-size: 16px;
-      font-weight: normal;
-    }
+table{width:100%;border-collapse:collapse}
+th,td{border:1px solid #ccc;padding:8px}
+th{background:#007bff;color:#fff;position:sticky;top:0}
+td:nth-child(2){font-weight:bold}
 
-    #container {
-      display: flex;
-      gap: 20px;
-      padding: 20px;
-      flex-wrap: wrap;
-      justify-content: center;
-      align-items: flex-start;
-    }
+tr.hadir{background:#d4edda}
+tr.terlambat{background:#fff3cd}
+tr.tidak-hadir{background:#f8d7da}
+tr.scan-baru{outline:3px solid #28a745;animation:pop .3s}
 
-    #qr-reader {
-      width: 400px;
-      height: 400px;
-      border: 2px solid #007bff;
-      border-radius: 10px;
-      background: #000;
-    }
+@keyframes pop{from{transform:scale(.97)}to{transform:scale(1)}}
 
-    #filter-search {
-      margin-top: 10px;
-      display: flex;
-      gap: 10px;
-      justify-content: center;
-      flex-wrap: wrap;
-    }
-
-    #filter-search select,
-    #filter-search input {
-      padding: 8px;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      font-size: 14px;
-      min-width: 150px;
-    }
-
-    #absensi-wrapper {
-      flex: 1 1 700px;
-      background: white;
-      border-radius: 10px;
-      overflow-y: auto;
-      max-height: 480px;
-      border: 2px solid #007bff;
-    }
-
-    #absensi-table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-
-    #absensi-table th,
-    #absensi-table td {
-      border: 1px solid #ccc;
-      padding: 8px;
-    }
-
-    #absensi-table th {
-      background-color: #007bff;
-      color: white;
-      position: sticky;
-      top: 0;
-      text-align: center;
-    }
-
-    #absensi-table td {
-      text-align: center;
-    }
-
-    #absensi-table td:nth-child(2) {
-      text-align: left;
-      font-weight: bold;
-    }
-
-    .toast {
-      padding: 10px 20px;
-      background-color: #333;
-      color: white;
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      border-radius: 5px;
-      opacity: 0.9;
-      z-index: 9999;
-    }
-
-    @media (max-width: 1000px) {
-      #container {
-        flex-direction: column;
-        align-items: center;
-      }
-
-      #qr-reader {
-        width: 90%;
-        max-width: 400px;
-      }
-
-      #absensi-wrapper {
-        width: 90%;
-      }
-    }
-  </style>
+.toast{
+  position:fixed;
+  bottom:20px;
+  left:50%;
+  transform:translateX(-50%);
+  background:#333;
+  color:#fff;
+  padding:10px 20px;
+  border-radius:6px;
+  z-index:9999;
+}
+</style>
 </head>
 
 <body>
 
 <header>
-  <img src="logo.png" alt="Logo SMPN 20">
-  <div>
-    <h1>ABSENSI SISWA</h1>
-    <h3>SMPN 20 Konawe Selatan</h3>
-  </div>
+<h1>ABSENSI SISWA</h1>
+<p>SMPN 20 Konawe Selatan</p>
 </header>
 
 <div id="container">
-  <div>
-    <div id="qr-reader"></div>
 
-    <div id="filter-search">
-      <select id="filter-kelas">
-        <option value="">Semua Kelas</option>
-      </select>
-      <input type="text" id="search-input" placeholder="Cari NIS / Nama...">
-    </div>
-  </div>
+<div>
+  <div id="qr-reader"></div>
 
-  <div id="absensi-wrapper">
-    <table id="absensi-table">
-      <thead>
-        <tr>
-          <th>NIS</th>
-          <th>Nama</th>
-          <th>Kelas</th>
-          <th>Jam Datang</th>
-          <th>Jam Pulang</th>
-          <th>Status</th>
-          <th>Keterangan</th>
-        </tr>
-      </thead>
-      <tbody id="absensi-body"></tbody>
-    </table>
+  <!-- PANEL CONTROL -->
+  <div id="panel">
+    <label>
+      <input type="checkbox" id="toggleSound" checked>
+      🔊 Aktifkan Sound
+    </label>
+    <label>
+      <input type="checkbox" id="toggleVibrate" checked>
+      📳 Aktifkan Vibrasi
+    </label>
   </div>
 </div>
 
-<audio id="beep-sound" src="https://www.soundjay.com/button/beep-07.wav" preload="auto"></audio>
+<div id="absensi-wrapper">
+<table>
+<thead>
+<tr>
+<th>NIS</th><th>Nama</th><th>Kelas</th>
+<th>Datang</th><th>Pulang</th>
+<th>Status</th><th>Keterangan</th>
+</tr>
+</thead>
+<tbody id="absensi-body"></tbody>
+</table>
+</div>
+
+</div>
+
+<!-- SOUND -->
+<audio id="sound-datang" src="datang.mp3" preload="auto"></audio>
+<audio id="sound-pulang" src="pulang.mp3" preload="auto"></audio>
 
 <script>
-  /* ================= FIREBASE ================= */
-  const firebaseConfig = {
-    apiKey: "AIzaSyCAg9Kb4I3dp-fcCIp5RzQKY8mJ3sD4hPU",
-    authDomain: "absensi-smpn-20-konsel.firebaseapp.com",
-    projectId: "absensi-smpn-20-konsel",
-    storageBucket: "absensi-smpn-20-konsel.appspot.com",
-    messagingSenderId: "247838919432",
-    appId: "1:247838919432:web:4505c7d499fb5d716dfabd"
-  };
+/* ================= FIREBASE ================= */
+firebase.initializeApp({
+  apiKey:"APIKEY",
+  authDomain:"PROJECT.firebaseapp.com",
+  projectId:"PROJECT"
+});
+const db=firebase.firestore();
 
-  firebase.initializeApp(firebaseConfig);
-  const db = firebase.firestore();
+/* ================= SETTING ================= */
+let jamDatangMulai=6, jamDatangAkhir=9;
+let jamPulangMulai=11, jamPulangAkhir=13;
+let tanggalLiburList=[];
 
-  /* ================= VARIABEL ================= */
-  let jamDatangMulai = 6,
-      jamDatangAkhir = 9,
-      jamPulangMulai = 11,
-      jamPulangAkhir = 13,
-      toleransiMenit = 3;
+const silentSchedule=[
+  {start:"12:30",end:"13:30"},
+  {start:"18:00",end:"23:59"}
+];
 
-  let tanggalLiburList = [];
-  const debounceMap = {};
-  const debounceMillis = 3000;
+/* ================= ELEMENT ================= */
+const bodyEl=document.getElementById("absensi-body");
+const soundDatang=document.getElementById("sound-datang");
+const soundPulang=document.getElementById("sound-pulang");
 
-  const absensiBody = document.getElementById("absensi-body");
-  const beep = document.getElementById("beep-sound");
-  const filterKelas = document.getElementById("filter-kelas");
-  const searchInput = document.getElementById("search-input");
+soundDatang.volume=0.3;
+soundPulang.volume=0.3;
 
-  let dataAbsensi = [];
+const toggleSound=document.getElementById("toggleSound");
+const toggleVibrate=document.getElementById("toggleVibrate");
 
-  /* ================= UTIL ================= */
-  function showToast(msg) {
-    const toast = document.createElement("div");
-    toast.className = "toast";
-    toast.innerText = msg;
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 3000);
-  }
+/* ================= UTIL ================= */
+function toast(msg){
+  const t=document.createElement("div");
+  t.className="toast";
+  t.innerText=msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(),3000);
+}
 
-  function getToday() {
-    const d = new Date();
-    return d.toISOString().split("T")[0];
-  }
+function today(){
+  return new Date().toISOString().split("T")[0];
+}
 
-  function isDalamRentang(jam, menit, mulai, akhir) {
-    const total = jam * 60 + menit;
-    return total >= mulai * 60 && total <= akhir * 60;
-  }
+function silentNow(){
+  const n=new Date();
+  const m=n.getHours()*60+n.getMinutes();
+  return silentSchedule.some(s=>{
+    const [sh,sm]=s.start.split(":").map(Number);
+    const [eh,em]=s.end.split(":").map(Number);
+    return m>=sh*60+sm && m<=eh*60+em;
+  });
+}
 
-  /* ================= LOGIKA ABSENSI ================= */
-  function updateStatusAbsensi(nis) {
-    const today = getToday();
-    const now = new Date();
+function play(type){
+  if(!toggleSound.checked || silentNow()) return;
+  const s=type==="datang"?soundDatang:soundPulang;
+  s.pause(); s.currentTime=0; s.play().catch(()=>{});
+}
 
-    if (tanggalLiburList.includes(today)) {
-      showToast("Hari ini libur");
-      return;
+function vibrate(){
+  if(!toggleVibrate.checked || silentNow()) return;
+  if(navigator.vibrate) navigator.vibrate([120,80,120]);
+}
+
+/* ================= TABLE ================= */
+function render(data){
+  bodyEl.innerHTML="";
+  Object.values(data).forEach(s=>{
+    const tr=document.createElement("tr");
+
+    if(s.status==="Hadir") tr.classList.add("hadir");
+    else if(s.keterangan==="Terlambat") tr.classList.add("terlambat");
+    else tr.classList.add("tidak-hadir");
+
+    tr.innerHTML=`
+      <td>${s.nis}</td>
+      <td>${s.nama}</td>
+      <td>${s.kelas}</td>
+      <td>${s.jamDatang||""}</td>
+      <td>${s.jamPulang||""}</td>
+      <td>${s.status}</td>
+      <td>${s.keterangan}</td>
+    `;
+    bodyEl.appendChild(tr);
+  });
+}
+
+/* ================= ABSENSI ================= */
+function updateAbsensi(nis){
+  const ref=db.collection("absensi").doc(today());
+  ref.get().then(d=>{
+    if(!d.exists || !d.data()[nis]){
+      toast("Data tidak ditemukan"); return;
     }
 
-    const ref = db.collection("absensi").doc(today);
+    const s=d.data()[nis];
+    const now=new Date();
+    const h=now.getHours();
 
-    ref.get().then(doc => {
-      if (!doc.exists || !doc.data()[nis]) {
-        showToast("Data absensi tidak ditemukan");
-        return;
-      }
+    if(s.jamDatang && s.jamPulang){
+      toast("Sudah lengkap"); return;
+    }
 
-      const siswa = doc.data()[nis];
+    if(!s.jamDatang && h>=jamDatangMulai && h<=jamDatangAkhir){
+      ref.update({
+        [`${nis}.jamDatang`]: now.toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"}),
+        [`${nis}.status`]:"TK",
+        [`${nis}.keterangan`]:"Datang"
+      });
+      play("datang"); vibrate(); toast("Absen datang");
+    }
+    else if(!s.jamPulang && h>=jamPulangMulai && h<=jamPulangAkhir){
+      ref.update({
+        [`${nis}.jamPulang`]: now.toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"}),
+        [`${nis}.status`]:"Hadir",
+        [`${nis}.keterangan`]:"Pulang"
+      });
+      play("pulang"); vibrate(); toast("Absen pulang");
+    }
+  });
+}
 
-      if (!siswa.jamDatang) {
-        if (isDalamRentang(now.getHours(), now.getMinutes(), jamDatangMulai, jamDatangAkhir + toleransiMenit)) {
-          ref.update({
-            [`${nis}.jamDatang`]: firebase.firestore.FieldValue.serverTimestamp(),
-            [`${nis}.status`]: "TK",
-            [`${nis}.keterangan`]: "Absen datang"
-          });
-          showToast("Absen datang berhasil");
-          beep.play();
-        } else {
-          showToast("Belum waktu absen datang");
-        }
-      } else if (!siswa.jamPulang) {
-        if (isDalamRentang(now.getHours(), now.getMinutes(), jamPulangMulai, jamPulangAkhir + toleransiMenit)) {
-          ref.update({
-            [`${nis}.jamPulang`]: firebase.firestore.FieldValue.serverTimestamp(),
-            [`${nis}.status`]: "Hadir",
-            [`${nis}.keterangan`]: "Absen pulang"
-          });
-          showToast("Absen pulang berhasil");
-          beep.play();
-        } else {
-          showToast("Belum waktu absen pulang");
-        }
-      } else {
-        showToast("Sudah lengkap absen");
-      }
-    });
-  }
+/* ================= QR ================= */
+new Html5Qrcode("qr-reader").start(
+  {facingMode:"environment"},
+  {fps:10,qrbox:280},
+  msg=>updateAbsensi(msg.trim())
+);
 
-  /* ================= QR ================= */
-  function onScanSuccess(nis) {
-    const now = Date.now();
-    if (debounceMap[nis] && now - debounceMap[nis] < debounceMillis) return;
-    debounceMap[nis] = now;
-    updateStatusAbsensi(nis.trim());
-  }
+/* ================= REALTIME ================= */
+db.collection("absensi").doc(today())
+.onSnapshot(d=>{ if(d.exists) render(d.data()); });
 
-  function mulaiScan() {
-    const qr = new Html5Qrcode("qr-reader");
-    qr.start(
-      { facingMode: "environment" },
-      { fps: 10, qrbox: 300 },
-      onScanSuccess
-    );
-  }
-
-  mulaiScan();
 </script>
 
 </body>
