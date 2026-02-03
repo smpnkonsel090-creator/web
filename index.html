@@ -3,273 +3,232 @@
 <head>
 <meta charset="UTF-8">
 <title>QR Scanner Absensi Siswa</title>
+
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+
 <style>
-body { font-family: Arial, sans-serif; margin:0; padding:0; background:#f4f4f4; }
-header { background:#007bff; display:flex; align-items:center; justify-content:center; padding:15px 20px; color:white; gap:15px; flex-direction:row; text-align:center; }
-header img { width:80px; height:80px; object-fit:contain; }
-header h1 { margin:0; font-size:26px; }
-header h3 { margin:0; font-size:16px; font-weight:normal; }
+body { font-family: Arial, sans-serif; margin:0; background:#f4f4f4; }
+header { background:#007bff; color:white; padding:15px; display:flex; gap:15px; align-items:center; justify-content:center; }
+header img { width:80px; }
 
-#container { display:flex; gap:20px; padding:20px; flex-wrap:wrap; justify-content:center; align-items:flex-start; }
-#qr-reader { width:400px; height:400px; border:2px solid #007bff; border-radius:10px; background:#000; flex-shrink:0; }
+#container { display:flex; gap:20px; padding:20px; flex-wrap:wrap; justify-content:center; }
+#qr-reader { width:400px; height:400px; border:3px solid #007bff; border-radius:10px; background:#000; }
 
-#filter-search { margin-top:10px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
-#filter-search select, #filter-search input { padding:8px; border:1px solid #ccc; border-radius:5px; font-size:14px; min-width:150px; }
+#filter-search { margin-top:10px; display:flex; gap:10px; justify-content:center; }
+#filter-search select,#filter-search input { padding:8px; border-radius:5px; }
 
-#absensi-wrapper { flex:1 1 700px; background:white; border-radius:10px; overflow-y:auto; max-height:480px; border:2px solid #007bff; }
-#absensi-table { width:100%; border-collapse:collapse; }
-#absensi-table th, #absensi-table td { border:1px solid #ccc; padding:8px; }
-#absensi-table th { background-color:#007bff; color:white; position:sticky; top:0; z-index:1; text-align:center; }
-#absensi-table td { text-align:left; }
-#absensi-table td:nth-child(1), #absensi-table td:nth-child(3),
-#absensi-table td:nth-child(4), #absensi-table td:nth-child(5),
-#absensi-table td:nth-child(6), #absensi-table td:nth-child(7) { text-align:center; }
-#absensi-table td:nth-child(2) { text-align:left; font-weight:bold; }
+#absensi-wrapper { flex:1; max-width:900px; background:white; border-radius:10px; overflow:auto; border:2px solid #007bff; }
+table { width:100%; border-collapse:collapse; }
+th,td { border:1px solid #ccc; padding:8px; text-align:center; }
+th { background:#007bff; color:white; position:sticky; top:0; }
 
-.toast { padding:10px 20px; background-color:#333; color:white; position:fixed; bottom:20px; left:50%; transform:translateX(-50%); border-radius:5px; opacity:0.9; z-index:9999; }
+/* ===== WARNA & ANIMASI ===== */
+tr.hadir { background:#d4edda; animation: fadeIn .5s; }
+tr.terlambat { background:#fff3cd; animation: shake .4s; }
+tr.pulang { background:#d1ecf1; animation: fadeIn .5s; }
+tr.tidak-hadir { background:#f8d7da; }
 
-/* Responsif */
-@media(max-width:1000px){
-    #container { flex-direction:column; align-items:center; }
-    #qr-reader { width:90%; height:auto; max-width:400px; margin-bottom:20px; }
-    #absensi-wrapper { width:90%; max-width:800px; }
+@keyframes fadeIn { from{opacity:0} to{opacity:1} }
+@keyframes shake {
+  0%{transform:translateX(0)}
+  25%{transform:translateX(-4px)}
+  50%{transform:translateX(4px)}
+  75%{transform:translateX(-4px)}
+  100%{transform:translateX(0)}
+}
+
+.toast{
+  position:fixed; bottom:20px; left:50%;
+  transform:translateX(-50%);
+  background:#333; color:white;
+  padding:10px 20px; border-radius:5px;
 }
 </style>
 </head>
 <body>
 
 <header>
-    <img src="logo.png" alt="Logo SMPN 20">
-    <div>
-        <h1>ABSENSI SISWA</h1>
-        <h3>SMPN 20 Konawe Selatan</h3>
-    </div>
+  <img src="logo.png">
+  <div>
+    <h2>ABSENSI SISWA</h2>
+    <small>SMPN 20 Konawe Selatan</small>
+  </div>
 </header>
 
 <div id="container">
-    <div>
-        <div id="qr-reader"></div>
-        <!-- Filter dan Pencarian -->
-        <div id="filter-search">
-            <select id="filter-kelas">
-                <option value="">Semua Kelas</option>
-            </select>
-            <input type="text" id="search-input" placeholder="Cari NIS / Nama...">
-        </div>
+  <div>
+    <div id="qr-reader"></div>
+    <div id="filter-search">
+      <select id="filter-kelas"><option value="">Semua Kelas</option></select>
+      <input id="search-input" placeholder="Cari NIS / Nama">
     </div>
-    <div id="absensi-wrapper">
-        <table id="absensi-table">
-            <thead>
-                <tr>
-                    <th>NIS</th>
-                    <th>Nama</th>
-                    <th>Kelas</th>
-                    <th>Jam Datang</th>
-                    <th>Jam Pulang</th>
-                    <th>Status</th>
-                    <th>Keterangan</th>
-                </tr>
-            </thead>
-            <tbody id="absensi-body"></tbody>
-        </table>
-    </div>
+  </div>
+
+  <div id="absensi-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>NIS</th><th>Nama</th><th>Kelas</th>
+          <th>Datang</th><th>Pulang</th><th>Status</th><th>Keterangan</th>
+        </tr>
+      </thead>
+      <tbody id="absensi-body"></tbody>
+    </table>
+  </div>
 </div>
 
-<audio id="beep-sound" src="https://www.soundjay.com/button/beep-07.wav" preload="auto"></audio>
+<!-- ===== SOUND KHUSUS ===== -->
+<audio id="sound-datang" src="https://actions.google.com/sounds/v1/cartoon/pop.ogg"></audio>
+<audio id="sound-pulang" src="https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg"></audio>
+<audio id="sound-terlambat" src="https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg"></audio>
 
 <script>
-// Firebase
-const firebaseConfig = {
+// ================= FIREBASE =================
+firebase.initializeApp({
   apiKey: "AIzaSyCAg9Kb4I3dp-fcCIp5RzQKY8mJ3sD4hPU",
   authDomain: "absensi-smpn-20-konsel.firebaseapp.com",
-  projectId: "absensi-smpn-20-konsel",
-  storageBucket: "absensi-smpn-20-konsel.appspot.com",
-  messagingSenderId: "247838919432",
-  appId: "1:247838919432:web:4505c7d499fb5d716dfabd",
-  measurementId: "G-1TNJRBYFEV"
-};
-firebase.initializeApp(firebaseConfig);
+  projectId: "absensi-smpn-20-konsel"
+});
 const db = firebase.firestore();
 
-let jamDatangMulai=6, jamDatangAkhir=9, jamPulangMulai=11, jamPulangAkhir=13, toleransiMenit=3;
-let tanggalLiburList=[], sudahPrefill=false;
-const debounceMap = {};
-const debounceMillis = 3000;
-const absensiBody = document.getElementById("absensi-body");
-const beep = document.getElementById("beep-sound");
-const filterKelas = document.getElementById("filter-kelas");
-const searchInput = document.getElementById("search-input");
+// ================= AUDIO =================
+const soundDatang = document.getElementById("sound-datang");
+const soundPulang = document.getElementById("sound-pulang");
+const soundTerlambat = document.getElementById("sound-terlambat");
+[soundDatang,soundPulang,soundTerlambat].forEach(s=>s.volume=0.25);
 
-let dataAbsensi = [];
-
-// Toast
-function showToast(msg){
-    const toast = document.createElement("div");
-    toast.className="toast"; toast.innerText=msg;
-    document.body.appendChild(toast);
-    setTimeout(()=>toast.remove(),3000);
+function playSound(s){
+  s.pause(); s.currentTime=0; s.play();
 }
 
-function getToday(){
-    const now = new Date();
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth()+1).padStart(2,'0');
-    const dd = String(now.getDate()).padStart(2,'0');
-    return `${yyyy}-${mm}-${dd}`;
+// ================= VIBRASI =================
+function vibrateSuccess(){
+  if(navigator.vibrate) navigator.vibrate([120,60,120]);
 }
 
-function isDalamRentang(jamSekarang, menitSekarang, jamMulai, jamAkhir){
-    const totalMenit = jamSekarang*60 + menitSekarang;
-    return totalMenit >= jamMulai*60 && totalMenit <= jamAkhir*60;
+// ================= SILENT OTOMATIS =================
+const silentSchedule = [
+  {start:"06:00", end:"06:30"},
+  {start:"12:00", end:"12:15"}
+];
+function isSilentTime(){
+  const n=new Date();
+  const m=n.getHours()*60+n.getMinutes();
+  return silentSchedule.some(s=>{
+    const [sh,sm]=s.start.split(":").map(Number);
+    const [eh,em]=s.end.split(":").map(Number);
+    return m>=sh*60+sm && m<=eh*60+em;
+  });
 }
 
-// Ambil pengaturan jam sekolah dan tanggal libur
-function ambilPengaturanJamSekolah(onDone){
-    db.collection("pengaturan").doc("jam_sekolah").get().then(doc=>{
-        if(doc.exists){
-            jamDatangMulai = parseInt(doc.get("jamDatangMulai") ?? 6);
-            jamDatangAkhir = parseInt(doc.get("jamDatangAkhir") ?? 9);
-            jamPulangMulai = parseInt(doc.get("jamPulangMulai") ?? 11);
-            jamPulangAkhir = parseInt(doc.get("jamPulangAkhir") ?? 13);
-            tanggalLiburList = doc.get("tanggal_libur") ?? [];
+// ================= UTIL =================
+const absensiBody=document.getElementById("absensi-body");
+const filterKelas=document.getElementById("filter-kelas");
+const searchInput=document.getElementById("search-input");
+let dataAbsensi=[];
+
+function toast(msg){
+  const t=document.createElement("div");
+  t.className="toast"; t.innerText=msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(),2500);
+}
+
+function today(){
+  return new Date().toISOString().split("T")[0];
+}
+
+// ================= RENDER TABEL =================
+function render(){
+  absensiBody.innerHTML="";
+  const fk=filterKelas.value;
+  const s=searchInput.value.toLowerCase();
+
+  dataAbsensi.filter(x=>{
+    return (!fk||x.kelas===fk) &&
+      (!s||x.nis.includes(s)||x.nama.toLowerCase().includes(s));
+  }).forEach(x=>{
+    let cls="";
+    if(x.keterangan==="Terlambat") cls="terlambat";
+    else if(x.keterangan==="Pulang") cls="pulang";
+    else if(x.status==="Hadir") cls="hadir";
+    else if(x.status==="TA") cls="tidak-hadir";
+
+    const tr=document.createElement("tr");
+    tr.className=cls;
+    tr.innerHTML=`
+      <td>${x.nis}</td>
+      <td>${x.nama}</td>
+      <td>${x.kelas}</td>
+      <td>${x.jamDatang?new Date(x.jamDatang.seconds*1000).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}):""}</td>
+      <td>${x.jamPulang?new Date(x.jamPulang.seconds*1000).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}):""}</td>
+      <td>${x.status}</td>
+      <td>${x.keterangan}</td>`;
+    absensiBody.appendChild(tr);
+  });
+}
+
+filterKelas.onchange=render;
+searchInput.oninput=render;
+
+// ================= LOGIKA ABSENSI =================
+function updateAbsensi(nis){
+  const now=new Date();
+  const jam=now.getHours();
+
+  const ref=db.collection("absensi").doc(today());
+  ref.get().then(d=>{
+    if(!d.exists || !d.data()[nis]){ toast("Data tidak ditemukan"); return; }
+    const s=d.data()[nis];
+
+    // DATANG
+    if(!s.jamDatang){
+      const terlambat = jam >= 7;
+      ref.update({
+        [`${nis}.jamDatang`]:firebase.firestore.FieldValue.serverTimestamp(),
+        [`${nis}.status`]:"TK",
+        [`${nis}.keterangan`]:terlambat?"Terlambat":"Hadir"
+      }).then(()=>{
+        toast(terlambat?"Datang TERLAMBAT":"Absen datang");
+        if(!isSilentTime()){
+          playSound(terlambat?soundTerlambat:soundDatang);
         }
-        onDone();
-    }).catch(err=>{ console.error(err); showToast("Gagal ambil jam sekolah"); onDone(); });
+        vibrateSuccess();
+      });
+    }
+
+    // PULANG
+    else if(!s.jamPulang){
+      ref.update({
+        [`${nis}.jamPulang`]:firebase.firestore.FieldValue.serverTimestamp(),
+        [`${nis}.status`]:"Hadir",
+        [`${nis}.keterangan`]:"Pulang"
+      }).then(()=>{
+        toast("Absen pulang");
+        if(!isSilentTime()) playSound(soundPulang);
+        vibrateSuccess();
+      });
+    }
+
+    else toast("Sudah absen lengkap");
+  });
 }
 
-// Prefill absensi hari ini (tidak menimpa data lama)
-function prefillAbsensiHariIni(onDone){
-    const today = getToday();
-    const absensiRef = db.collection("absensi").doc(today);
-    absensiRef.get().then(doc=>{
-        db.collection("siswa").get().then(snapshot=>{
-            const newData = {};
-            const existingData = doc.exists ? doc.data() : {};
-            const kelasSet = new Set();
-            snapshot.forEach(siswa=>{
-                const nis = siswa.get("nis");
-                kelasSet.add(siswa.get("kelas"));
-                if(!existingData[nis]){
-                    newData[nis] = {
-                        status:"TA", jamDatang:null, jamPulang:null, keterangan:"",
-                        nis:nis, nama:siswa.get("nama"), kelas:siswa.get("kelas")
-                    };
-                }
-            });
-            // Isi pilihan kelas
-            filterKelas.innerHTML = '<option value="">Semua Kelas</option>' + [...kelasSet].map(k=>`<option value="${k}">${k}</option>`).join("");
-            if(Object.keys(newData).length>0){
-                absensiRef.set(newData,{merge:true}).then(()=>{ sudahPrefill=true; onDone(); });
-            } else { sudahPrefill=true; onDone(); }
-        });
-    });
-}
+// ================= QR =================
+const qr=new Html5Qrcode("qr-reader");
+qr.start({facingMode:"environment"},{fps:10,qrbox:250},
+  msg=>updateAbsensi(msg.trim()),
+  ()=>{}
+);
 
-// Update tabel realtime (siswa absen terakhir di atas)
-function updateAbsensiTableRealtime(today){
-    db.collection("absensi").doc(today).onSnapshot(doc=>{
-        const data = doc.data() || {};
-        dataAbsensi = Object.values(data).sort((a,b)=>{
-            const tA = a.jamPulang ? a.jamPulang.seconds : (a.jamDatang ? a.jamDatang.seconds : 0);
-            const tB = b.jamPulang ? b.jamPulang.seconds : (b.jamDatang ? b.jamDatang.seconds : 0);
-            return tB - tA;
-        });
-        renderTable();
-    });
-}
-
-// Render table dengan filter + search
-function renderTable(){
-    const kelasFilter = filterKelas.value;
-    const search = searchInput.value.toLowerCase();
-    absensiBody.innerHTML="";
-    dataAbsensi.filter(siswa=>{
-        const cocokKelas = !kelasFilter || siswa.kelas===kelasFilter;
-        const cocokSearch = !search || siswa.nis.toLowerCase().includes(search) || siswa.nama.toLowerCase().includes(search);
-        return cocokKelas && cocokSearch;
-    }).forEach(siswa=>{
-        const jamDatang = siswa.jamDatang ? new Date(siswa.jamDatang.seconds*1000).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}) : '';
-        const jamPulang = siswa.jamPulang ? new Date(siswa.jamPulang.seconds*1000).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}) : '';
-        const row = document.createElement("tr");
-        row.innerHTML = `<td>${siswa.nis}</td><td>${siswa.nama}</td><td>${siswa.kelas}</td><td>${jamDatang}</td><td>${jamPulang}</td><td>${siswa.status}</td><td>${siswa.keterangan}</td>`;
-        absensiBody.appendChild(row);
-    });
-}
-filterKelas.addEventListener("change",renderTable);
-searchInput.addEventListener("input",renderTable);
-
-// Update status absensi sesuai APK
-function updateStatusAbsensi(nis){
-    const today = getToday();
-    const now = new Date();
-    const jamSekarang = now.getHours();
-    const menitSekarang = now.getMinutes();
-
-    if(tanggalLiburList.includes(today)){ showToast("Hari ini libur"); return; }
-
-    const absensiRef = db.collection("absensi").doc(today);
-    absensiRef.get().then(doc=>{
-        if(!doc.exists || !doc.data()[nis]){ showToast("Data absensi tidak ditemukan"); return; }
-        const siswa = doc.data()[nis];
-        const jamDatang = siswa.jamDatang;
-        const jamPulang = siswa.jamPulang;
-        const ket = siswa.keterangan || "";
-
-        if(["IZIN","SAKIT"].includes(ket.toUpperCase())){
-            showToast(`Siswa ${nis} (${ket}) hari ini`); beep.play(); return;
-        }
-
-        if(!jamDatang){
-            if(isDalamRentang(jamSekarang, menitSekarang,jamDatangMulai,jamDatangAkhir+toleransiMenit)){
-                const keterangan = jamSekarang>jamDatangAkhir ? "Terlambat" : "Absen datang berhasil";
-                absensiRef.update({
-                    [`${nis}.jamDatang`]: firebase.firestore.FieldValue.serverTimestamp(),
-                    [`${nis}.status`]: "TK",
-                    [`${nis}.keterangan`]: keterangan
-                }).then(()=>{ showToast(keterangan); beep.play(); });
-            } else showToast("Belum bisa absen datang");
-        } else if(!jamPulang){
-            if(isDalamRentang(jamSekarang, menitSekarang,jamPulangMulai,jamPulangAkhir+toleransiMenit)){
-                absensiRef.update({
-                    [`${nis}.jamPulang`]: firebase.firestore.FieldValue.serverTimestamp(),
-                    [`${nis}.status`]: "Hadir",
-                    [`${nis}.keterangan`]: "Absen pulang berhasil"
-                }).then(()=>{ showToast("Absen pulang berhasil"); beep.play(); });
-            } else showToast("Belum bisa absen pulang");
-        } else { showToast("Sudah lengkap absen hari ini"); beep.play(); }
-    }).catch(err=>{ console.error(err); showToast("Gagal update absensi"); });
-}
-
-// Scan QR
-function onScanSuccess(nis){
-    nis = nis.trim();
-    if(!nis) return;
-    const now = Date.now();
-    if(debounceMap[nis] && now - debounceMap[nis] < debounceMillis) return;
-    debounceMap[nis] = now;
-    updateStatusAbsensi(nis);
-}
-
-function mulaiScan(){
-    const html5QrCode = new Html5Qrcode("qr-reader");
-    html5QrCode.start(
-        { facingMode:"environment" },
-        { fps:10, qrbox:300 },
-        qrCodeMessage => onScanSuccess(qrCodeMessage),
-        errorMessage => {}
-    ).catch(err=>console.error("Gagal start QR scanner:",err));
-}
-
-// Inisialisasi
-ambilPengaturanJamSekolah(()=>{
-    prefillAbsensiHariIni(()=>{
-        const today = getToday();
-        updateAbsensiTableRealtime(today);
-        mulaiScan();
-    });
+// ================= REALTIME =================
+db.collection("absensi").doc(today())
+.onSnapshot(d=>{
+  if(!d.exists) return;
+  dataAbsensi=Object.values(d.data());
+  render();
 });
 </script>
 </body>
